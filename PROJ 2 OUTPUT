@@ -1,0 +1,398 @@
+> ####### PROJECT II - INTRO TO BUSINESS ANALYTICS #######
+> # IMPORTING CLEAN DATASET FROM PROJECT I - UNEMPLOYMENT AND RELATED FACTORS BY STATE
+> df<-read.csv('/Users/madonnaconnors/Desktop/ACADEMICS/FALL\ 2020/INTRO\ TO\ BUS.\ ANALYTICS/IBA\ PROJECT\ II/IBA\ Project\ II\ Dataset.csv')
+> View(df)
+> #loading up ggplot2
+> library(ggplot2)
+> library(plyr)
+> library(tseries)
+
+    ‘tseries’ version: 0.10-47
+
+    ‘tseries’ is a package for time series analysis and computational finance.
+
+    See ‘library(help="tseries")’ for details.
+
+> .libPaths()
+[1] "/Library/Frameworks/R.framework/Versions/3.5/Resources/library"
+> install.packages("zoo")
+Error in install.packages : Updating loaded packages
+> library("zoo")
+
+Attaching package: ‘zoo’
+
+The following objects are masked from ‘package:base’:
+
+    as.Date, as.Date.numeric
+
+> install.packages("quantmod")
+Error in install.packages : Updating loaded packages
+> # NONLINEAR (POLYNOMIAL) TRANSFORMATIONS 
+> df$AVG.RESIDENT.POPULATION2<-df$AVG.RESIDENT.POPULATION^2 #Quadratic tranfsormation (2nd Order)
+> df$AVG.RESIDENT.POPULATION3<-df$AVG.RESIDENT.POPULATION^3 #Quadratic transformation (3rd order)
+> df$ln_AVG.RESIDENT.POPULATION<-log(df$AVG.RESIDENT.POPULATION) #Logarithmic Transformation
+> View(df)
+> p<-.7 #percentage of data that will be used to train the model
+> obs_count<-dim(df)[1] # number of rows in the dataframe
+> training_size <- floor(p * obs_count) # number of obs for training data partition and rounding down
+> training_size #print
+[1] 35
+> set.seed(1234) #goal is to make partition reproducible
+> train_ind <- sample(obs_count, size = training_size) #creating vector
+> Training <- df[train_ind, ] #pulling rows at random for training
+> Testing <- df[-train_ind, ] #pulling rows at random for testing
+> #checking dimensions for each partition - training/tesing
+> dim(Training)
+[1] 35 10
+> dim(Testing)
+[1] 15 10
+> ### BUILDING MODEL - TRAINING DATA ### 
+> M1 <- lm(AVG..UNEMPLOYMENT.RATE ~ AVG.RESIDENT.POPULATION, Training) #from training data
+> summary(M1) #summary diagnostic output
+
+Call:
+lm(formula = AVG..UNEMPLOYMENT.RATE ~ AVG.RESIDENT.POPULATION, 
+    data = Training)
+
+Residuals:
+       Min         1Q     Median         3Q        Max 
+-0.0207583 -0.0078078 -0.0003591  0.0067603  0.0270839 
+
+Coefficients:
+                         Estimate Std. Error t value Pr(>|t|)    
+(Intercept)             5.225e-02  2.808e-03  18.609   <2e-16 ***
+AVG.RESIDENT.POPULATION 6.282e-07  2.699e-07   2.328   0.0262 *  
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.01241 on 33 degrees of freedom
+Multiple R-squared:  0.141,	Adjusted R-squared:  0.115 
+F-statistic: 5.418 on 1 and 33 DF,  p-value: 0.02621
+
+> M1$coefficients #Beta estimates, intercept and slope
+            (Intercept) AVG.RESIDENT.POPULATION 
+           5.225379e-02            6.281562e-07 
+> M1$residuals #return residuals
+            6            31            30            48            40            29             1            10 
+-0.0063512017 -0.0075250066 -0.0027396921 -0.0084121339  0.0158821765 -0.0130804429  0.0017699639  0.0067392530 
+           28            22            42            41            11            35            38            47 
+ 0.0150695713  0.0245122405  0.0118034558 -0.0207582566 -0.0080906247  0.0065085072 -0.0061934121 -0.0014089326 
+           43             9            50             8            34            33             5             2 
+-0.0186784130  0.0010688055 -0.0206011240 -0.0018114652 -0.0206691671  0.0058544172 -0.0003591191  0.0143107910 
+           32            21            13            39            19            44            37            26 
+-0.0083519184  0.0006674129  0.0097234602  0.0270839324  0.0039107340 -0.0159455528  0.0143663341 -0.0008695049 
+           23            45             3 
+ 0.0004395293 -0.0046460604  0.0067814434 
+> M1$fitted.values
+         6         31         30         48         40         29          1         10         28         22         42 
+0.05535120 0.05352501 0.05773969 0.05341213 0.05511782 0.05308044 0.05523004 0.05826075 0.05393043 0.05848776 0.05619654 
+        41         11         35         38         47         43          9         50          8         34         33 
+0.05275826 0.05309062 0.05949149 0.06019341 0.05640893 0.06767841 0.06393119 0.05260112 0.05281147 0.05266917 0.05814558 
+         5          2         32         21         13         39         19         44         37         26         23 
+0.07535912 0.05268921 0.06435192 0.05633259 0.06027654 0.05291607 0.05308927 0.05394555 0.05463367 0.05286950 0.05556047 
+        45          3 
+0.05264606 0.05621856 
+> hist(M1$residuals) #histogram of residual values
+> jarque.bera.test(M1$residuals)
+
+	Jarque Bera Test
+
+data:  M1$residuals
+X-squared = 0.37212, df = 2, p-value = 0.8302
+
+> ##from project 1
+> ggplot(df, aes(x = AVG.RESIDENT.POPULATION, y = AVG..UNEMPLOYMENT.RATE)) +
++   geom_point() +
++   geom_smooth(method = 'lm')
+`geom_smooth()` using formula 'y ~ x'
+> #GENERATING PREDICTIONS ON THE TRAINING DATA
+> PRED_1_IN <- predict(M1, Training) #generate predictions on the (in-sample) training data
+> View(PRED_1_IN)
+> View(M1$fitted.values) #these are the same as the fitted values
+> #PREDICTIONS ON THE TEST DATA - BENCHMARKING
+> PRED_1_OUT <- predict(M1, Testing) #for predictions on the (out-of-sample) testing data
+> #COMPUTING IN-SAMPLE AND OUT-OF-SAMPLE ROOT MEAN SQUARED ERROR
+> RMSE_1_IN<-sqrt(sum((PRED_1_IN-Training$AVG..UNEMPLOYMENT.RATE)^2)/length(PRED_1_IN))  #in-sample error
+> RMSE_1_OUT<-sqrt(sum((PRED_1_OUT-Testing$AVG..UNEMPLOYMENT.RATE)^2)/length(PRED_1_OUT)) #out-of-sample error
+> RMSE_1_IN #IN-SAMPLE ERROR
+[1] 0.01204793
+> RMSE_1_OUT #OUT-OF-SAMPLE ERROR
+[1] 0.01046325
+> x_grid <- seq(0,8,.1) #CREATES GRID OF X-AXIS VALUES
+> predictions <- predict(M1, list(AVG.RESIDENT.POPULATION=x_grid))
+> plot(Training$AVG..UNEMPLOYMENT.RATE ~ Training$AVG.RESIDENT.POPULATION, col='purple')
+> lines(x_grid, predictions, col='green',lwd=3)
+> points(Testing$AVG..UNEMPLOYMENT.RATE ~ Testing$AVG.RESIDENT.POPULATION, col='orange', pch=3)
+> #BUILDING QUADRATIC MODEL (TRAINING)
+> M2 <- lm(AVG..UNEMPLOYMENT.RATE ~ AVG.RESIDENT.POPULATION + AVG.RESIDENT.POPULATION2, Training)
+> summary(M2)
+
+Call:
+lm(formula = AVG..UNEMPLOYMENT.RATE ~ AVG.RESIDENT.POPULATION + 
+    AVG.RESIDENT.POPULATION2, data = Training)
+
+Residuals:
+       Min         1Q     Median         3Q        Max 
+-0.0194574 -0.0070923 -0.0004669  0.0059641  0.0289885 
+
+Coefficients:
+                           Estimate Std. Error t value Pr(>|t|)    
+(Intercept)               4.949e-02  3.522e-03  14.052 3.08e-15 ***
+AVG.RESIDENT.POPULATION   1.477e-06  7.146e-07   2.067   0.0469 *  
+AVG.RESIDENT.POPULATION2 -2.869e-11  2.240e-11  -1.281   0.2094    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.01229 on 32 degrees of freedom
+Multiple R-squared:  0.1829,	Adjusted R-squared:  0.1319 
+F-statistic: 3.582 on 2 and 32 DF,  p-value: 0.03946
+
+> M2$coefficients #Beta estimates, intercept and slope
+             (Intercept)  AVG.RESIDENT.POPULATION AVG.RESIDENT.POPULATION2 
+            4.948596e-02             1.477173e-06            -2.869331e-11 
+> M2$residuals #return residuals
+            6            31            30            48            40            29             1            10 
+-0.0070721906 -0.0063578542 -0.0051981523 -0.0071123642  0.0153754507 -0.0113802376  0.0011592278  0.0040120030 
+           28            22            42            41            11            35            38            47 
+ 0.0157756626  0.0216802336  0.0103726748 -0.0186537705 -0.0064029494  0.0033031513 -0.0095727933 -0.0030017094 
+           43             9            50             8            34            33             5             2 
+-0.0194574040 -0.0020305371 -0.0182939902  0.0002252138 -0.0184502266  0.0031831763  0.0100007745  0.0165038826 
+           32            21            13            39            19            44            37            26 
+-0.0112925128 -0.0008678880  0.0063282149  0.0289885102  0.0056000805 -0.0152561987  0.0143293728  0.0010936798 
+           23            45             3 
+-0.0004668520 -0.0023972459  0.0053335679 
+> M2$fitted.values
+         6         31         30         48         40         29          1         10         28         22         42 
+0.05607219 0.05235785 0.06019815 0.05211236 0.05562455 0.05138024 0.05584077 0.06098800 0.05322434 0.06131977 0.05762733 
+        41         11         35         38         47         43          9         50          8         34         33 
+0.05065377 0.05140295 0.06269685 0.06357279 0.05800171 0.06845740 0.06703054 0.05029399 0.05077479 0.05045023 0.06081682 
+         5          2         32         21         13         39         19         44         37         26         23 
+0.06499923 0.05049612 0.06729251 0.05786789 0.06367179 0.05101149 0.05139992 0.05325620 0.05467063 0.05090632 0.05646685 
+        45          3 
+0.05039725 0.05766643 
+> hist(M2$residuals) #histogram of residual values
+> jarque.bera.test(M2$residuals)
+
+	Jarque Bera Test
+
+data:  M2$residuals
+X-squared = 0.70039, df = 2, p-value = 0.7046
+
+> #GENERATING PREDICTIONS ON THE TRAINING DATA
+> PRED_2_IN <- predict(M2, Training) #generate predictions on the (in-sample) training data
+> View(PRED_2_IN)
+> View(M2$fitted.values) #these are the same as the fitted values
+> #GENERATING PREDICTIONS ON THE TEST DATA FOR BENCHMARKING
+> PRED_2_OUT <- predict(M2, Testing) #generate predictions on the (out-of-sample) testing data
+> #COMPUTING IN-SAMPLE AND OUT-OF-SAMPLE ROOT MEAN SQUARED ERROR
+> RMSE_2_IN<-sqrt(sum((PRED_2_IN-Training$AVG..UNEMPLOYMENT.RATE)^2)/length(PRED_2_IN))  #computes in-sample error
+> RMSE_2_OUT<-sqrt(sum((PRED_2_OUT-Testing$AVG..UNEMPLOYMENT.RATE)^2)/length(PRED_2_OUT)) #computes out-of-sample 
+> RMSE_2_IN #IN-SAMPLE ERROR
+[1] 0.01175037
+> RMSE_2_OUT #OUT-OF-SAMPLE ERROR
+[1] 0.01056546
+> x_grid <- seq(0,8,.1) #CREATES GRID OF X-AXIS VALUES
+> predictions <- predict(M2, list(AVG.RESIDENT.POPULATION=x_grid, AVG.RESIDENT.POPULATION2=x_grid^2))
+> plot(Training$AVG..UNEMPLOYMENT.RATE ~ Training$AVG.RESIDENT.POPULATION, col='red')
+> lines(x_grid, predictions, col='blue', lwd=3)
+> points(Testing$AVG..UNEMPLOYMENT.RATE ~ Testing$AVG.RESIDENT.POPULATION, col='green', pch=3)
+> ##LINEAR REGRESSION WITH ALL VARIABLES IN DATASET AS REGRESSORS
+> M3 <- lm(AVG..UNEMPLOYMENT.RATE ~ AVG.RESIDENT.POPULATION + AVG..PER.CAPITA.PERSONAL.INCOME + BACHELOR.S.DEGREE.OR.HIGHER, df)
+> summary(M3)
+
+Call:
+lm(formula = AVG..UNEMPLOYMENT.RATE ~ AVG.RESIDENT.POPULATION + 
+    AVG..PER.CAPITA.PERSONAL.INCOME + BACHELOR.S.DEGREE.OR.HIGHER, 
+    data = df)
+
+Residuals:
+       Min         1Q     Median         3Q        Max 
+-0.0197496 -0.0064648  0.0001299  0.0064223  0.0292435 
+
+Coefficients:
+                                  Estimate Std. Error t value Pr(>|t|)    
+(Intercept)                      6.750e-02  1.109e-02   6.089 2.13e-07 ***
+AVG.RESIDENT.POPULATION          7.121e-07  2.503e-07   2.846   0.0066 ** 
+AVG..PER.CAPITA.PERSONAL.INCOME -4.621e-07  4.422e-07  -1.045   0.3015    
+BACHELOR.S.DEGREE.OR.HIGHER      5.172e-03  5.680e-02   0.091   0.9278    
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.01174 on 46 degrees of freedom
+Multiple R-squared:  0.1736,	Adjusted R-squared:  0.1197 
+F-statistic: 3.221 on 3 and 46 DF,  p-value: 0.03115
+
+> M3$coefficients #Beta estimates, intercept and slope
+                    (Intercept)         AVG.RESIDENT.POPULATION AVG..PER.CAPITA.PERSONAL.INCOME 
+                   6.750474e-02                    7.121193e-07                   -4.620872e-07 
+    BACHELOR.S.DEGREE.OR.HIGHER 
+                   5.171940e-03 
+> M3$residuals #return residuals
+            1             2             3             4             5             6             7             8 
+ 2.234561e-04  1.951230e-02  5.624710e-03  4.026395e-05 -3.852115e-04 -4.766895e-03  1.411155e-02  2.194429e-04 
+            9            10            11            12            13            14            15            16 
+ 4.594654e-04  5.255463e-03 -5.697558e-03 -2.080256e-03  1.131232e-02  3.751960e-03 -1.045224e-02 -5.588328e-03 
+           17            18            19            20            21            22            23            24 
+ 1.037356e-02 -4.586676e-03  4.315696e-03 -6.720544e-03  6.660261e-03  2.326122e-02  2.552809e-03  1.032342e-02 
+           25            26            27            28            29            30            31            32 
+ 6.886039e-03 -1.553936e-03 -1.783607e-02  1.574668e-02 -9.203804e-03  3.093781e-03 -8.950249e-03 -4.801366e-03 
+           33            34            35            36            37            38            39            40 
+ 5.435102e-03 -1.885108e-02  5.708391e-03 -1.522297e-02  1.407467e-02 -4.948086e-03  2.924353e-02  1.395334e-02 
+           41            42            43            44            45            46            47            48 
+-1.882107e-02  1.079874e-02 -1.974964e-02 -1.773490e-02 -2.879383e-03 -1.317706e-02  1.175548e-03 -1.023954e-02 
+           49            50 
+-4.075322e-03 -1.579154e-02 
+> M3$fitted.values
+         1          2          3          4          5          6          7          8          9         10         11 
+0.05677654 0.04748770 0.05737529 0.05595974 0.07538521 0.05376689 0.04388845 0.05078056 0.06454053 0.05974454 0.05069756 
+        12         13         14         15         16         17         18         19         20         21         22 
+0.05508026 0.05868768 0.05724804 0.05345224 0.05258833 0.05662644 0.05458668 0.05268430 0.05072054 0.05033974 0.05973878 
+        23         24         25         26         27         28         29         30         31         32         33 
+0.05344719 0.05667658 0.05611396 0.05355394 0.05183607 0.05325332 0.04920380 0.05190622 0.05495025 0.06080137 0.05856490 
+        34         35         36         37         38         39         40         41         42         43         44 
+0.05085108 0.06029161 0.05422297 0.05492533 0.05894809 0.05075647 0.05704666 0.05082107 0.05720126 0.06874964 0.05573490 
+        45         46         47         48         49         50 
+0.05087938 0.05417706 0.05382445 0.05523954 0.05507532 0.04779154 
+> hist(M3$residuals) #histogram of residual values
+> jarque.bera.test(M3$residuals) #p-value is greater than 0.05, fail to reject and conclude that data is normal
+
+	Jarque Bera Test
+
+data:  M3$residuals
+X-squared = 0.59296, df = 2, p-value = 0.7434
+
+> #GENERATING PREDICTIONS ON THE TRAINING DATA
+> PRED_3_IN <- predict(M3, Training) #generate predictions on the (in-sample) training data
+> View(PRED_3_IN)
+> View(M3$fitted.values) #these are the same as the fitted values
+> #GENERATING PREDICTIONS ON THE TEST DATA FOR BENCHMARKING
+> PRED_3_OUT <- predict(M3, Testing) #generate predictions on the (out-of-sample) testing data
+> #COMPUTING IN-SAMPLE AND OUT-OF-SAMPLE ROOT MEAN SQUARED ERROR
+> RMSE_3_IN<-sqrt(sum((PRED_3_IN-Training$AVG..UNEMPLOYMENT.RATE)^2)/length(PRED_3_IN))  #computes in-sample error
+> RMSE_3_OUT<-sqrt(sum((PRED_3_OUT-Testing$AVG..UNEMPLOYMENT.RATE)^2)/length(PRED_3_OUT)) #computes out-of-sample 
+> RMSE_3_IN #IN-SAMPLE ERROR
+[1] 0.01184575
+> RMSE_3_OUT #OUT-OF-SAMPLE ERROR
+[1] 0.009749984
+> ##LOGARITHMIC MODEL
+> M4 <- lm(AVG..UNEMPLOYMENT.RATE ~ ln_AVG.RESIDENT.POPULATION, Training)
+> summary(M4)
+
+Call:
+lm(formula = AVG..UNEMPLOYMENT.RATE ~ ln_AVG.RESIDENT.POPULATION, 
+    data = Training)
+
+Residuals:
+       Min         1Q     Median         3Q        Max 
+-0.0180948 -0.0083825 -0.0005405  0.0059186  0.0304863 
+
+Coefficients:
+                           Estimate Std. Error t value Pr(>|t|)   
+(Intercept)                0.010640   0.013882   0.766  0.44885   
+ln_AVG.RESIDENT.POPULATION 0.005585   0.001670   3.344  0.00207 **
+---
+Signif. codes:  0 ‘***’ 0.001 ‘**’ 0.01 ‘*’ 0.05 ‘.’ 0.1 ‘ ’ 1
+
+Residual standard error: 0.01157 on 33 degrees of freedom
+Multiple R-squared:  0.2531,	Adjusted R-squared:  0.2305 
+F-statistic: 11.18 on 1 and 33 DF,  p-value: 0.002067
+
+> M4$coefficients #Beta estimates, intercept and slope
+               (Intercept) ln_AVG.RESIDENT.POPULATION 
+               0.010640019                0.005584777 
+> M4$residuals #return residuals
+            6            31            30            48            40            29             1            10 
+-0.0091289982 -0.0071552459 -0.0063213367 -0.0076359572  0.0133084898 -0.0107518735 -0.0009061433  0.0031719190 
+           28            22            42            41            11            35            38            47 
+ 0.0142987984  0.0209647518  0.0085233254 -0.0159936586 -0.0058202400  0.0031309976 -0.0093859393 -0.0047696922 
+           43             9            50             8            34            33             5             2 
+-0.0180947859 -0.0005404902 -0.0139093521  0.0024463307 -0.0149084607  0.0022800289  0.0056484162  0.0198283747 
+           32            21            13            39            19            44            37            26 
+-0.0097381635 -0.0026661246  0.0065558922  0.0304862668  0.0061888348 -0.0167513531  0.0123426923  0.0028933994 
+           23            45             3 
+-0.0024941197  0.0014111841  0.0034922322 
+> M4$fitted.values
+         6         31         30         48         40         29          1         10         28         22         42 
+0.05812900 0.05315525 0.06132134 0.05263596 0.05769151 0.05075187 0.05790614 0.06182808 0.05470120 0.06203525 0.05947667 
+        41         11         35         38         47         43          9         50          8         34         33 
+0.04799366 0.05082024 0.06286900 0.06338594 0.05976969 0.06709479 0.06554049 0.04590935 0.04855367 0.04690846 0.06171997 
+         5          2         32         21         13         39         19         44         37         26         23 
+0.06935158 0.04717163 0.06573816 0.05966612 0.06344411 0.04951373 0.05081117 0.05475135 0.05665731 0.04910660 0.05849412 
+        45          3 
+0.04658882 0.05950777 
+> hist(M4$residuals) #histogram of residual values
+> jarque.bera.test(M4$residuals) #p-value is greater than 0.05, fail to reject and conclude that data is normal
+
+	Jarque Bera Test
+
+data:  M4$residuals
+X-squared = 1.8748, df = 2, p-value = 0.3917
+
+> #GENERATING PREDICTIONS ON THE TRAINING DATA
+> PRED_4_IN <- predict(M4, Training) #generate predictions on the (in-sample) training data
+> View(PRED_4_IN)
+> View(M4$fitted.values) #these are the same as the fitted values
+> #GENERATING PREDICTIONS ON THE TEST DATA FOR BENCHMARKING
+> PRED_4_OUT <- predict(M4, Testing) #generate predictions on the (out-of-sample) testing data
+> #COMPUTING IN-SAMPLE AND OUT-OF-SAMPLE ROOT MEAN SQUARED ERROR
+> RMSE_4_IN<-sqrt(sum((PRED_4_IN-Training$AVG..UNEMPLOYMENT.RATE)^2)/length(PRED_4_IN))  #computes in-sample error
+> RMSE_4_OUT<-sqrt(sum((PRED_4_OUT-Testing$AVG..UNEMPLOYMENT.RATE)^2)/length(PRED_4_OUT)) #computes out-of-sample 
+> RMSE_4_IN #IN-SAMPLE ERROR
+[1] 0.0112344
+> RMSE_4_OUT #OUT-OF-SAMPLE ERROR
+[1] 0.01111436
+> x_grid <- seq(0,8,.1) #CREATES GRID OF X-AXIS VALUES
+> predictions <- predict(M4, list(ln_AVG.RESIDENT.POPULATION=log(x_grid)))
+> plot(Training$AVG..UNEMPLOYMENT.RATE ~ Training$AVG.RESIDENT.POPULATION, col='blue')
+> lines(x_grid, predictions, col='green', lwd=3)
+> points(Testing$AVG..UNEMPLOYMENT.RATE ~ Testing$AVG.RESIDENT.POPULATION, col='red', pch=3)
+> #COMPARISON OF IN-SAMPLE MODEL PERFORMANCE BY RMSE
+> RMSE_1_IN #MODEL WITH ONLY LINEAR TERM
+[1] 0.01204793
+> RMSE_2_IN #MODEL WITH LINEAR AND QUADRATIC TERM
+[1] 0.01175037
+> RMSE_3_IN #MODEL WITH MULTIPLE INDEPENDENT VARS.
+[1] 0.01184575
+> RMSE_4_IN #LOGARITHMIC MODEL
+[1] 0.0112344
+> #COMPARISON OF OUT-OF-SAMPLE MODEL PERFORMANCE BY RMSE
+> RMSE_1_OUT #MODEL WITH ONLY LINEAR TERM
+[1] 0.01046325
+> RMSE_2_OUT #MODEL WITH LINEAR AND QUADRATIC TERM
+[1] 0.01056546
+> RMSE_3_OUT #MODEL WITH MULT. INDEPENDENT VARS.
+[1] 0.009749984
+> RMSE_4_OUT #LOGARITHMIC MODEL
+[1] 0.01111436
+> x_grid <- seq(0,8,.1) #CREATES GRID OF X-AXIS VALUES
+> plot(Training$AVG..UNEMPLOYMENT.RATE ~ Training$AVG.RESIDENT.POPULATION, col='blue')
+> predictions_1 <- predict(M1, list(AVG.RESIDENT.POPULATION=x_grid))
+> predictions_2 <- predict(M2, list(AVG.RESIDENT.POPULATION=x_grid, AVG.RESIDENT.POPULATION2=x_grid^2))
+> predictions_3 <- predict(M3, list(AVG.RESIDENT.POPULATION=x_grid, AVG..PER.CAPITA.PERSONAL.INCOME=x_grid^2, BACHELOR.S.DEGREE.OR.HIGHER=x_grid^3))
+> predictions_4 <- predict(M4, list(ln_AVG.RESIDENT.POPULATION=log(x_grid)))
+> lines(x_grid, predictions_1, col='purple', lwd=3) #PLOTS M1
+> lines(x_grid, predictions_2, col='blue', lwd=3) #PLOTS M2
+> lines(x_grid, predictions_3, col='green', lwd=3) #PLOTS M3
+> lines(x_grid, predictions_4, col='red', lwd=3) #PLOTS M4
+> points(Testing$AVG..UNEMPLOYMENT.RATE ~ Testing$AVG.RESIDENT.POPULATION, col='red', pch=3)
+> x_grid <- seq(0,8,.1) #CREATES GRID OF X-AXIS VALUES
+> plot(Training$AVG..UNEMPLOYMENT.RATE ~ Training$AVG.RESIDENT.POPULATION, col='blue')
+> predictions_1 <- predict(M1, list(AVG.RESIDENT.POPULATION=x_grid))
+> predictions_2 <- predict(M2, list(AVG.RESIDENT.POPULATION=x_grid, AVG.RESIDENT.POPULATION2=x_grid^2))
+> predictions_3 <- predict(M3, list(AVG.RESIDENT.POPULATION=x_grid, AVG..PER.CAPITA.PERSONAL.INCOME=x_grid^2, BACHELOR.S.DEGREE.OR.HIGHER=x_grid^3))
+> predictions_4 <- predict(M4, list(ln_AVG.RESIDENT.POPULATION=log(x_grid)))
+> lines(x_grid, pred_1, col='purple', lwd=3) #PLOTS M1
+Error in xy.coords(x, y) : object 'pred_1' not found
+> lines(x_grid, pred_2, col='blue', lwd=3) #PLOTS M2
+Error in xy.coords(x, y) : object 'pred_2' not found
+> x_grid <- seq(0,8,.1) #CREATES GRID OF X-AXIS VALUES
+> plot(Training$AVG..UNEMPLOYMENT.RATE ~ Training$AVG.RESIDENT.POPULATION, col='blue')
+> predictions_1 <- predict(M1, list(AVG.RESIDENT.POPULATION=x_grid))
+> predictions_2 <- predict(M2, list(AVG.RESIDENT.POPULATION=x_grid, AVG.RESIDENT.POPULATION2=x_grid^2))
+> predictions_3 <- predict(M3, list(AVG.RESIDENT.POPULATION=x_grid, AVG..PER.CAPITA.PERSONAL.INCOME=x_grid^2, BACHELOR.S.DEGREE.OR.HIGHER=x_grid^3))
+> predictions_4 <- predict(M4, list(ln_AVG.RESIDENT.POPULATION=log(x_grid)))
+> lines(x_grid, predictions_1, col='purple', lwd=3) #PLOTS M1
+> lines(x_grid, predictions_2, col='blue', lwd=3) #PLOTS M2
+> lines(x_grid, predictions_3, col='green', lwd=3) #PLOTS M3
+> lines(x_grid, predictions_4, col='red', lwd=3) #PLOTS M4
+> points(Testing$AVG..UNEMPLOYMENT.RATE ~ Testing$AVG.RESIDENT.POPULATION, col='red', pch=3)
